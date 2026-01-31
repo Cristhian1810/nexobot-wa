@@ -1,0 +1,14 @@
+# Dependencias
+node_modules/
+
+# Sesión de WhatsApp (MUY IMPORTANTE)
+wa-session/
+auth_info_baileys/
+
+# Archivos de compilación
+dist/
+
+# Logs y sistemas
+npm-debug.log
+.DS_Store
+.env
