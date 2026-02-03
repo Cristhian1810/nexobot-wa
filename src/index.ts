@@ -3,14 +3,15 @@ import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   downloadMediaMessage,
+  downloadContentFromMessage,
 } from 'baileys';
 import { Boom } from '@hapi/boom';
 import P from 'pino';
 import QRCode from 'qrcode';
 import { Sticker, StickerTypes } from 'wa-sticker-formatter';
-
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import fs from 'fs';
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
@@ -35,14 +36,28 @@ async function connectToWhatsApp(): Promise<void> {
       const error = lastDisconnect?.error as Boom | undefined;
       const statusCode = error?.output?.statusCode;
 
-      if (statusCode === DisconnectReason.restartRequired) {
-        console.log('Restart required, reconnecting...');
-        sock.end(undefined);
-        connectToWhatsApp();
-      }
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-      if (statusCode === DisconnectReason.loggedOut) {
-        console.log('Logged out. Scan QR again.');
+      console.log(
+        'Conexión cerrada debido a:',
+        error?.message || error,
+        ', reconectando:',
+        shouldReconnect,
+      );
+
+      if (shouldReconnect) {
+        connectToWhatsApp();
+      } else {
+        console.log(
+          'Sesión cerrada. Eliminando credenciales y generando nuevo QR...',
+        );
+        try {
+          fs.rmSync('wa-session', { recursive: true, force: true });
+          console.log('Carpetas de sesión eliminadas.');
+          connectToWhatsApp();
+        } catch (err) {
+          console.error('No se pudo eliminar la carpeta de sesión:', err);
+        }
       }
     }
 
@@ -56,7 +71,7 @@ async function connectToWhatsApp(): Promise<void> {
       const jid: string = m.key.remoteJid ?? '';
       if (!jid) continue;
 
-      const username: string = m.pushName ?? '';
+      const username: string = m.pushName ?? 'Usuario';
 
       const imageMessage = m.message?.imageMessage;
       const videoMessage = m.message?.videoMessage;
@@ -71,11 +86,7 @@ async function connectToWhatsApp(): Promise<void> {
       const quoted = m.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
       if (message !== '' && username !== '') {
-        // lógica de los mensajes -------------------------------------------------------
-        console.log(`${username} dice: ${message}`);
-
-        // COMANDO MENU
-        if (message === '#menu') {
+        if (message === '#menu' || message === '#help') {
           const uptime = process.uptime();
           const horas = Math.floor(uptime / 3600);
           const minutos = Math.floor((uptime % 3600) / 60);
@@ -89,20 +100,37 @@ async function connectToWhatsApp(): Promise<void> {
 ║❂ Prefijo único: 「  #  」
 ║❂ Cliente: ${username}
 ╚══════════
-‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎
+‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎‎
 ~|-------------------------|~
 *[_>] _COMANDOS_ ☷*
 ~|-------------------------|~
 
-╔「 _CONVERSORES :_ 」
+╔「 _STICKERS :_ 」
 ║╭—————————
-║├  #sticker | #s
+║├  #sticker | #s {citar una imagen/video}
 ║╰—————————
 ╚══════════
-╔「 _HERRAMIENTAS :_ 」
+╔「 _DESCARGAS :_ 」
 ║╭—————————
-║├  #ping
-║├  #menu
+║├  #mp4 | #ytmp4 [link youtube]
+║├  #mp3 | #play [link youtube]
+║╰—————————
+╚══════════
+╔「 _UTILIDADES :_ 」
+║╭—————————
+║├  #del | #delete {citar un mensaje}
+║├  #pfp [@usuario]
+║├  #menu | #help
+║├  #ping | #p
+║├  #toimage | #toimg {citar sticker}
+║├  #say [mensaje]
+║╰—————————
+╚══════════
+╔「 _ADMINISTRACIÓN :_ 」
+║╭—————————
+║├  #bot [on/off]
+║├  #kick <@usuario> | {mencion}
+║├  #tag [mensaje]
 ║╰—————————
 ╚══════════
           `.trim();
@@ -116,8 +144,7 @@ async function connectToWhatsApp(): Promise<void> {
           );
         }
 
-        // COMANDO PING
-        if (message === '#ping') {
+        if (message === '#ping' || message === '#p') {
           const timestamp = m.messageTimestamp ? Number(m.messageTimestamp) : 0;
           const latency = Date.now() - timestamp * 1000;
 
@@ -128,12 +155,13 @@ async function connectToWhatsApp(): Promise<void> {
           );
         }
 
-        // COMANDO STICKER
         if (message === '#s' || message === '#sticker') {
-          if (!quoted && !imageMessage && !videoMessage) {
+          const isSticker = !!quoted?.stickerMessage;
+
+          if (!quoted && !imageMessage && !videoMessage && !isSticker) {
             await sock.sendMessage(
               jid,
-              { text: 'Responde a una imagen o video (≤ 7s)' },
+              { text: 'Responde a una imagen, video (≤ 7s) o sticker' },
               { quoted: m },
             );
             continue;
@@ -145,10 +173,10 @@ async function connectToWhatsApp(): Promise<void> {
               (quoted.videoMessage.seconds ?? 0) <= 7) ||
             (!!videoMessage && (videoMessage.seconds ?? 0) <= 7);
 
-          if (!isImage && !isVideo) {
+          if (!isImage && !isVideo && !isSticker) {
             await sock.sendMessage(
               jid,
-              { text: 'Solo imágenes o videos menores a 7 segundos' },
+              { text: 'Solo imágenes, stickers o videos menores a 7 segundos' },
               { quoted: m },
             );
             continue;
@@ -178,7 +206,7 @@ async function connectToWhatsApp(): Promise<void> {
 
             const sticker = new Sticker(buffer, {
               pack: 'NexoBot',
-              author: 'Nullpathy',
+              author: username,
               type: StickerTypes.FULL,
               quality: quality,
             });
@@ -190,7 +218,7 @@ async function connectToWhatsApp(): Promise<void> {
               await sock.sendMessage(
                 jid,
                 {
-                  text: '❌ El video es muy pesado para ser sticker (Max 1MB). Intenta recortarlo.',
+                  text: 'El archivo es muy pesado para ser sticker (Max 1MB).',
                 },
                 { quoted: m },
               );
@@ -201,7 +229,7 @@ async function connectToWhatsApp(): Promise<void> {
               jid,
               {
                 sticker: stickerBuffer,
-                isAnimated: isVideo,
+                isAnimated: isVideo || isSticker,
                 mimetype: 'image/webp',
               },
               {
@@ -217,7 +245,76 @@ async function connectToWhatsApp(): Promise<void> {
             );
           }
         }
-        // ------------------------------------------------------------------------------
+
+        if (message === '#toimage' || message === '#toimg') {
+          if (!quoted?.stickerMessage) {
+            await sock.sendMessage(
+              jid,
+              { text: 'Por favor, responde a un sticker.' },
+              { quoted: m },
+            );
+            continue;
+          }
+
+          if (quoted.stickerMessage.isAnimated) {
+            await sock.sendMessage(
+              jid,
+              { text: 'Solo stickers sin movimiento.' },
+              { quoted: m },
+            );
+            continue;
+          }
+
+          try {
+            const stream = await downloadContentFromMessage(
+              quoted.stickerMessage,
+              'sticker',
+            );
+
+            let buffer = Buffer.from([]);
+            for await (const chunk of stream) {
+              buffer = Buffer.concat([buffer, chunk]);
+            }
+
+            const timestamp = Date.now();
+            const inputPath = `./temp_${timestamp}.webp`;
+            const outputPath = `./temp_${timestamp}.png`;
+
+            fs.writeFileSync(inputPath, buffer);
+
+            await new Promise((resolve, reject) => {
+              ffmpeg(inputPath)
+                .on('error', (err) => {
+                  console.error('Error en ffmpeg:', err);
+                  reject(err);
+                })
+                .on('end', () => {
+                  resolve(true);
+                })
+                .save(outputPath);
+            });
+
+            const imageBuffer = fs.readFileSync(outputPath);
+
+            await sock.sendMessage(
+              jid,
+              {
+                image: imageBuffer,
+              },
+              { quoted: m },
+            );
+
+            fs.unlinkSync(inputPath);
+            fs.unlinkSync(outputPath);
+          } catch (error) {
+            console.error('Error detallado al convertir sticker:', error);
+            await sock.sendMessage(
+              jid,
+              { text: 'Ocurrió un error al procesar la imagen.' },
+              { quoted: m },
+            );
+          }
+        }
       }
     }
   });
