@@ -1,10 +1,10 @@
-# 🤖 NexoBot - Bot de WhatsApp (Baileys)
+# 🤖 NyxelBot - Bot de WhatsApp (Baileys)
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 ![NodeJS](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)
 ![WhatsApp](https://img.shields.io/badge/WhatsApp-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
 
-**NexoBot** es un asistente automatizado para WhatsApp rápido, modular y eficiente, desarrollado íntegramente en **TypeScript** utilizando la librería **Baileys**.
+**NyxelBot** es un asistente automatizado para WhatsApp rápido, modular y eficiente, desarrollado íntegramente en **TypeScript** utilizando la librería **Baileys**.
 
 Este proyecto fue diseñado para facilitar la gestión de multimedia y utilidades de red dentro de la plataforma, destacando por su capacidad de procesar stickers animados y estáticos con optimización automática de peso.
 
@@ -44,8 +44,8 @@ Si deseas ejecutar una instancia de este bot en tu propio entorno, sigue estos p
 ### 1. Clonar Repositorio e Instalar Dependencias
 
 ```bash
-git clone https://github.com/Cristhian1810/nexobot-wa.git
-cd nexobot-wa
+git clone https://github.com/Cristhian1810/nyxelbot-wa.git
+cd nyxelbot-wa
 npm install
 ```
 
